@@ -118,25 +118,44 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Wait for services to be healthy
-        run: Start-Sleep -Seconds 20
+        run: |
+          $containers = @("studentapp-api", "studentapp-prometheus", "studentapp-db")
+          $timeout = 12 # 12 * 5 seconds = 60 seconds total
+          
+          foreach ($container in $containers) {
+              Write-Host "Checking health for $container..."
+              $count = 0
+              while ($count -lt $timeout) {
+                  $status = docker inspect --format='{{.State.Health.Status}}' $container 2>$null
+                  if ($status -eq "healthy") {
+                      Write-Host "✅ $container is healthy!"
+                      break
+                  }
+                  Write-Host "Waiting for $container... (Status: $status)"
+                  Start-Sleep -Seconds 5
+                  $count++
+              }
+              if ($count -eq $timeout) {
+                  Write-Error "❌ $container failed to become healthy within 60 seconds."
+                  exit 1
+              }
+          }
 
       - name: Show running containers
         run: docker-compose ps
 
-      - name: Verify Backend health
+      - name: Verify Web Access
         run: |
-          $response = Invoke-WebRequest -Uri http://localhost:8000/api/health -UseBasicParsing
-          if ($response.StatusCode -eq 200) { Write-Host "✅ Backend is healthy" } else { exit 1 }
-
-      - name: Verify Grafana is running
-        run: |
-          $response = Invoke-WebRequest -Uri http://localhost:3000 -UseBasicParsing
-          if ($response.StatusCode -eq 200) { Write-Host "✅ Grafana is healthy" } else { exit 1 }
-
-      - name: Verify Prometheus is running
-        run: |
-          $response = Invoke-WebRequest -Uri http://localhost:9090 -UseBasicParsing
-          if ($response.StatusCode -eq 200) { Write-Host "✅ Prometheus is healthy" } else { exit 1 }
+          # Final check to ensure ports are reachable from the host
+          $endpoints = @(
+            "http://localhost:8000/api/health",
+            "http://localhost:3001", # Grafana port from your compose
+            "http://localhost:9090"
+          )
+          foreach ($url in $endpoints) {
+            $res = Invoke-WebRequest -Uri $url -UseBasicParsing -Method Get
+            if ($res.StatusCode -eq 200) { Write-Host "✅ Reachable: $url" }
+          }
 
   # ── Selenium Tests ───────────────────────────────────
   selenium-test:
