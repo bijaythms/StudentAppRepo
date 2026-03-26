@@ -14,20 +14,20 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - name: Clean locked files
-        run: |
-          $ws = "${{ github.workspace }}"
-          foreach ($dir in '.pytest_cache', '__pycache__', 'selenium\.pytest_cache', 'selenium\__pycache__') {
-            $p = Join-Path $ws $dir
-            if (Test-Path $p) { attrib -r -h -s "$p\*" /s /d 2>$null; Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue }
-          }
-        working-directory: .
-        continue-on-error: true
-
       - uses: actions/checkout@v4
 
       - name: Mark workspace as safe directory
         run: git config --global --add safe.directory "${{ github.workspace }}"
+
+      - name: Clean locked files
+        run: |
+          $ws = "${{ github.workspace }}"
+          foreach ($dir in '.pytest_cache', '__pycache__') {
+            $p = Join-Path $ws $dir
+            if (Test-Path $p) { Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue }
+          }
+        working-directory: .
+        continue-on-error: true
 
       - name: Verify Python
         run: python --version
@@ -45,16 +45,6 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - name: Clean locked files
-        run: |
-          $ws = "${{ github.workspace }}"
-          foreach ($dir in '.pytest_cache', '__pycache__', 'selenium\.pytest_cache', 'selenium\__pycache__') {
-            $p = Join-Path $ws $dir
-            if (Test-Path $p) { attrib -r -h -s "$p\*" /s /d 2>$null; Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue }
-          }
-        working-directory: .
-        continue-on-error: true
-
       - uses: actions/checkout@v4
 
       - name: Mark workspace as safe directory
@@ -76,15 +66,6 @@ jobs:
     runs-on: self-hosted
     needs: [backend-test, frontend-test]
     steps:
-      - name: Clean locked files
-        run: |
-          $ws = "${{ github.workspace }}"
-          foreach ($dir in '.pytest_cache', '__pycache__', 'selenium\.pytest_cache', 'selenium\__pycache__') {
-            $p = Join-Path $ws $dir
-            if (Test-Path $p) { attrib -r -h -s "$p\*" /s /d 2>$null; Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue }
-          }
-        continue-on-error: true
-
       - uses: actions/checkout@v4
 
       - name: Mark workspace as safe directory
@@ -92,14 +73,12 @@ jobs:
 
       - name: Build backend image
         run: |
-          $ErrorActionPreference = 'SilentlyContinue'
-          docker build -t student-app-backend:${{ github.sha }} ./backend 2>&1 | Out-Default
+          docker build -t student-app-backend:${{ github.sha }} ./backend
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build frontend image
         run: |
-          $ErrorActionPreference = 'SilentlyContinue'
-          docker build -t student-app-frontend:${{ github.sha }} ./frontend 2>&1 | Out-Default
+          docker build -t student-app-frontend:${{ github.sha }} ./frontend
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify images
@@ -113,38 +92,71 @@ jobs:
     runs-on: self-hosted
     needs: [docker-build]
     steps:
-      - name: Clean locked files
-        run: |
-          $ws = "${{ github.workspace }}"
-          foreach ($dir in '.pytest_cache', '__pycache__', 'selenium\.pytest_cache', 'selenium\__pycache__') {
-            $p = Join-Path $ws $dir
-            if (Test-Path $p) { attrib -r -h -s "$p\*" /s /d 2>$null; Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue }
-          }
-        continue-on-error: true
-
       - uses: actions/checkout@v4
 
       - name: Mark workspace as safe directory
         run: git config --global --add safe.directory "${{ github.workspace }}"
 
-      - name: Stop existing containers (preserve volumes)
-        run: |
-          $ErrorActionPreference = 'SilentlyContinue'
-          docker-compose down 2>&1 | Out-Default
+      - name: Stop existing containers
+        run: docker-compose down
         continue-on-error: true
 
-      - name: Start services with fresh build
+      - name: Start all services
         run: |
-          $ErrorActionPreference = 'SilentlyContinue'
-          docker-compose up --build -d 2>&1 | Out-Default
+          docker-compose up --build -d
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Wait for services to be healthy
-        run: |
-          Start-Sleep -Seconds 15
-          docker-compose ps
+        run: Start-Sleep -Seconds 20
 
-      - name: Verify application health
+      - name: Show running containers
+        run: docker-compose ps
+
+      - name: Verify Backend health
         run: |
           $response = Invoke-WebRequest -Uri http://localhost:8000/api/health -UseBasicParsing
-          if ($response.StatusCode -eq 200) { Write-Host "Backend is healthy" } else { exit 1 }
+          if ($response.StatusCode -eq 200) { Write-Host "✅ Backend is healthy" } else { exit 1 }
+
+      - name: Verify Grafana is running
+        run: |
+          $response = Invoke-WebRequest -Uri http://localhost:3000 -UseBasicParsing
+          if ($response.StatusCode -eq 200) { Write-Host "✅ Grafana is healthy" } else { exit 1 }
+
+      - name: Verify Prometheus is running
+        run: |
+          $response = Invoke-WebRequest -Uri http://localhost:9090 -UseBasicParsing
+          if ($response.StatusCode -eq 200) { Write-Host "✅ Prometheus is healthy" } else { exit 1 }
+
+  # ── Selenium Tests ───────────────────────────────────
+  selenium-test:
+    runs-on: self-hosted
+    needs: [deploy]        
+    defaults:
+      run:
+        working-directory: selenium
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mark workspace as safe directory
+        run: git config --global --add safe.directory "${{ github.workspace }}"
+
+      - name: Install Selenium dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Selenium tests
+        run: python -m pytest tests/ -v --tb=short
+```
+
+---
+
+## Final Pipeline Flow:
+```
+Push Code
+    ↓
+Backend Tests + Frontend Tests (parallel)
+    ↓
+Docker Build
+    ↓
+Deploy (backend + frontend + db + grafana + prometheus)
+    ↓
+Selenium Tests (runs against live app)
