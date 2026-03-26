@@ -31,22 +31,22 @@ jobs:
 
       - name: Verify Python version
         run: |
-          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python311;" + $env:PATH
+          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python313;C:\Users\bijay\AppData\Local\Programs\Python\Python313\Scripts;" + $env:PATH
           python --version
 
       - name: Upgrade pip
         run: |
-          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python311;" + $env:PATH
+          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python313;C:\Users\bijay\AppData\Local\Programs\Python\Python313\Scripts;" + $env:PATH
           python -m pip install --upgrade pip
 
       - name: Install dependencies
         run: |
-          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python311;" + $env:PATH
-          python -m pip install -r requirements.txt
+          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python313;C:\Users\bijay\AppData\Local\Programs\Python\Python313\Scripts;" + $env:PATH
+          python -m pip install --only-binary=:all: -r requirements.txt
 
       - name: Run unit tests
         run: |
-          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python311;" + $env:PATH
+          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python313;C:\Users\bijay\AppData\Local\Programs\Python\Python313\Scripts;" + $env:PATH
           python -m pytest tests/ -v --tb=short
 
   # ── Frontend Tests ───────────────────────────────────
@@ -153,15 +153,15 @@ jobs:
 
       - name: Upgrade pip
         run: |
-          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python311;" + $env:PATH
+          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python313;C:\Users\bijay\AppData\Local\Programs\Python\Python313\Scripts;" + $env:PATH
           python -m pip install --upgrade pip
 
       - name: Install Selenium dependencies
         run: |
-          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python311;" + $env:PATH
-          python -m pip install -r requirements.txt
+          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python313;C:\Users\bijay\AppData\Local\Programs\Python\Python313\Scripts;" + $env:PATH
+          python -m pip install --only-binary=:all: -r requirements.txt
 
       - name: Run Selenium tests
         run: |
-          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python311;" + $env:PATH
+          $env:PATH = "C:\Users\bijay\AppData\Local\Programs\Python\Python313;C:\Users\bijay\AppData\Local\Programs\Python\Python313\Scripts;" + $env:PATH
           python -m pytest tests/ -v --tb=short
